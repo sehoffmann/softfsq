@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["softfsq"]
+
+[project]
+name = "softfsq"
+description = ""
+readme = "README.md"
+version = "0.1"
+authors = [
+    { name = "Sebastian Hoffmann", email = "shoffmann@bgc-jena.mpg.de"},
+]
+maintainers = [
+    { name = "Sebastian Hoffmann", email = "shoffmann@bgc-jena.mpg.de"},
+]
+
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "dmlcloud",
+    "torch~=2.6",
+    "torchvision",
+    "torchmetrics~=1.7",
+    "albumentations",
+    "matplotlib",
+    "wandb",
+    "tqdm",
+    "einops",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "pytest",
+    'ipykernel',
+]
+
+[tool.black]
+skip-string-normalization = true
+line-length = 120
+target-version = ["py311", "py312", "py313"]
+
+[tool.uv]
+python-preference = "managed"
+
+[tool.uv.sources]
+dmlcloud = { path = "../dmlcloud", editable = true }

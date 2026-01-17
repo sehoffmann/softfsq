@@ -1,0 +1,10 @@
+name: taming-f8-8192-pre
+
+epochs: 15
+cosine_annealing: true
+
+codebook_size: 8192
+
+model: softfsq.models.taming_f8
+discriminator: null
+perceptual_loss: softfsq.losses.lpips_loss
