@@ -2,6 +2,7 @@ from typing import override, Sequence
 
 import torch
 import einops
+import softtorch
 
 from softfsq.quantization.common import QuantizedTensors, Quantizer
 
@@ -24,9 +25,22 @@ def floor_ste(z):
 
 
 class FSQ(Quantizer):
-    def __init__(self, levels: Sequence[int]):
+    def __init__(self, 
+        levels: Sequence[int],
+        mode: str = 'entropic',
+        softness: float = 1.0,
+    ):
         super().__init__()
         
+        if mode not in ['str', 'entropic']:
+            raise ValueError(f'Mode must be one of ["str", "entropic"], got {mode}')
+        self.mode = mode
+
+        if softness < 0.0:
+            raise ValueError('softness must be non-negative')
+        self.softness = softness
+
+
         levels = torch.tensor(levels, dtype=torch.int64)
         if levels.ndim != 1:
             raise ValueError('levels must be a 1D sequence of integers.')
@@ -86,7 +100,11 @@ class FSQ(Quantizer):
         with torch.autocast(device_type=inputs.device.type, enabled=False):   # run in f32!
             inputs_f32 = inputs.float()
             z_bounded = self._bound(inputs_f32) # bound to [-(L-1)/2, (L-1)/2]
-            z_q = round_ste(z_bounded)
+            
+            if self.mode == 'str':
+                z_q = round_ste(z_bounded)
+            else:
+                z_q = softtorch.round_st(z_bounded, mode=self.mode, softness=self.softness)
 
             # renormalize back to [-1, 1]
             half_width = self.levels // 2

@@ -325,12 +325,21 @@ def train_vqgan():
     torch.set_float32_matmul_precision('high')  # TensorFloat32 format
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('--softness', type=float, default=None, help='Softness for soft quantization')
+    parser.add_argument('--mode', type=str, default=None, help='Softening mode for soft quantization')
     parser.add_argument('config', type=str, nargs='+', help='Path to the configuration file')
     args = parser.parse_args()
 
     configs = [OmegaConf.load(c) for c in args.config]
     config = OmegaConf.merge(*configs)
     config.lr = dml.scale_lr(config.base_lr * config.batch_size)
+
+    if config.quantizer.factory == 'softfsq.quantization.FSQ':
+        if args.softness is not None:
+            config.quantizer.softness = args.softness
+        if args.mode is not None:
+            config.quantizer.mode = args.mode
+
 
     pipe = dml.Pipeline(config, name=config.get('name'))
     pipe.append(VQStage(epochs=config.epochs))

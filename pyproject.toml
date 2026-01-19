@@ -23,6 +23,7 @@ maintainers = [
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "dmlcloud",
+    "softtorch @ git+https://github.com/a-paulus/softtorch.git",
     "torch~=2.6",
     "torchvision",
     "torchmetrics~=1.7",
