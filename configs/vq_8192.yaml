@@ -2,5 +2,7 @@ quantizer:
   factory: softfsq.quantization.VectorQuantizer
   codebook_dim: 64
   codebook_size: 8192
-  commitment_weight: 0.25
-  embedding_weight: 1.0
+  initialization: uniform
+  normalization: layer_norm
+  commitment_weight: 0.1
+  embedding_weight: 0.25

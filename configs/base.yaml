@@ -35,5 +35,5 @@ disc_loss: softfsq.losses.DiscriminatorHingeLoss
 
 compile: False
 profile: False
-wandb: False
+wandb: softfsq-imagenet
 checkpointing: True

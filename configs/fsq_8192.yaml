@@ -1,0 +1,3 @@
+quantizer:
+  factory: softfsq.quantization.FSQ
+  levels: [8,8,5,5,5]

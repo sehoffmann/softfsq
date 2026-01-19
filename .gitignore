@@ -1,6 +1,6 @@
-
 /.venv
 /checkpoints
+/wandb
 /model_weights
 /interactive_2080.sh
 /interactive_a100.sh

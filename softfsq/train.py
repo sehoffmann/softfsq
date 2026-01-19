@@ -306,18 +306,16 @@ class VQStage(dml.Stage):
                 self.discriminator.eval()
 
             x = x.to(self.device)
-            out, z, z_q, indices = self.model(x)
+            pred, quant_result = self.model(x)
 
             self.loss_fn(
                 model=self.model.module,
-                pred=out,
+                pred=pred,
                 target=x,
                 global_step=self.global_step,
-                z=z,
-                z_q=z_q,
                 logits_fake=None,
             )  # logs internally
-            self._log_generator_metrics(x, out, z, z_q, indices)
+            self._log_generator_metrics(x, pred, quant_result)
 
 
 def train_vqgan():
@@ -338,7 +336,7 @@ def train_vqgan():
     pipe.append(VQStage(epochs=config.epochs))
 
     if config.wandb:
-        pipe.enable_wandb(project='vqgan')
+        pipe.enable_wandb(project=config.wandb)
 
     if config.checkpointing:
         pipe.enable_checkpointing('checkpoints')
