@@ -1,3 +1,4 @@
+name: fsq4096
 quantizer:
   factory: softfsq.quantization.FSQ
   levels: [8,5,5,5]

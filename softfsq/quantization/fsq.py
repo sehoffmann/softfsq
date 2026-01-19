@@ -27,7 +27,7 @@ def floor_ste(z):
 class FSQ(Quantizer):
     def __init__(self, 
         levels: Sequence[int],
-        mode: str = 'entropic',
+        mode: str = 'str',
         softness: float = 1.0,
     ):
         super().__init__()
@@ -44,13 +44,16 @@ class FSQ(Quantizer):
         levels = torch.tensor(levels, dtype=torch.int64)
         if levels.ndim != 1:
             raise ValueError('levels must be a 1D sequence of integers.')
-        self.register_buffer('levels', levels, persistent=True)
+        self.register_buffer('levels', levels, persistent=False)
 
         basis = torch.cat([
             torch.tensor([1], dtype=torch.int64),
             torch.cumprod(levels[:-1], dim=0, dtype=torch.int64),
         ])  # used to convert codes (i.e. rounded values) to indices
-        self.register_buffer('basis', basis, persistent=True)
+        self.register_buffer('basis', basis, persistent=False)
+
+        scale_factor = torch.tensor(6 / 128).sqrt()
+        self.register_buffer('scale_factor', scale_factor, persistent=False)
 
         self._codebook_size = int(torch.prod(levels).item())
         self._codebook_dim = len(levels)
@@ -91,6 +94,7 @@ class FSQ(Quantizer):
             torch.floor_divide(indices, self.basis), self.levels
         )
         decoded = self._scale_and_shift_inverse(codes_non_centered)
+        decoded = decoded * self.scale_factor
         return einops.rearrange(decoded, 'b ... c -> b c ...').contiguous()  # channels first
 
     @override
@@ -113,23 +117,14 @@ class FSQ(Quantizer):
 
             indices = self._codes_to_indexes(z_q)
 
+            z_q = z_q * self.scale_factor
+            z_bounded = z_bounded * self.scale_factor
+
         # to channels first
         z_q = einops.rearrange(z_q, 'b ... c -> b c ...').contiguous()
         z_bounded = einops.rearrange(z_bounded, 'b ... c -> b c ...').contiguous()
 
         return QuantizedTensors(values=z_q, indices=indices, pre_quantization=z_bounded)
 
-if __name__ == '__main__':
-    fsq = FSQ(levels=[5, 4])
-    x = torch.tensor([
-        [[2.0, 0.0, -2.0], [-1.0, -1.0, -1.0]],
-    ])
-    print(x.shape)
-    print('input: ', x)
-    qt = fsq.encode(x)
-    print('bounded: ', qt.pre_quantization, qt.pre_quantization.shape)
-    print('indices: ', qt.indices, qt.indices.shape)
-    print('quant: ', qt.values, qt.values.shape)
-
-    # decode:
-    print('decoded: ', fsq.decode(qt.indices), fsq.decode(qt.indices).shape)
+    def __repr__(self) -> str:
+        return f'FSQ(levels={self.levels.tolist()}, mode="{self.mode}", softness={self.softness})'

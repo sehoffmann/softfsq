@@ -1,10 +1,9 @@
-name: vqgan
 seed: 12
 model_checkpoint: null
 
 base_lr: 4.5e-6
 batch_size: 12
-epochs: 20
+epochs: 10
 steps_per_epoch: 0
 
 model: ???
@@ -17,8 +16,8 @@ optimizer:
   betas: [0.5, 0.9]
   weight_decay: 0.0
 
-rampup: null
-cosine_annealing: False
+rampup: 200
+cosine_annealing: True
 clip_grad_norm: null
 
 adv_start_step: 0

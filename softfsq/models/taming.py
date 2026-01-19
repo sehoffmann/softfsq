@@ -312,13 +312,6 @@ class TamingVQGAN(nn.Module):
         self.encoder = Encoder(**ddconfig)
         self.decoder = Decoder(**ddconfig)
         self.quantizer = quantizer
-
-        self.quant_conv = torch.nn.Conv2d(ddconfig['z_channels'], ddconfig['z_channels'], 1, bias=False)
-        self.post_quant_conv = torch.nn.Sequential(
-            nn.Conv2d(ddconfig['z_channels'], ddconfig['z_channels'], 1),
-            nn.GELU(),
-            nn.GroupNorm(1, ddconfig['z_channels']),
-        )
         self.register_buffer('step', torch.tensor(0, dtype=torch.long), persistent=True)
 
     def last_layer_weights(self):
@@ -329,13 +322,13 @@ class TamingVQGAN(nn.Module):
             self.step += 1
 
         z = self.encoder(x)
-        z = self.quant_conv(z)
-        if quantize:
-            quant_res = self.quantizer(z)
-        else:
-            quant_res = identity_quantize(z)
 
-        quant = self.post_quant_conv(quant_res.values)
+        quant_res = self.quantizer(z)
+        if not quantize and quant_res.pre_quantization is not None:
+            quant = quant_res.pre_quantization
+        else:
+            quant = quant_res.values
+
         decoded = self.decoder(quant)
         return decoded, quant_res
 

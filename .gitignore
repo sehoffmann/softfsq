@@ -4,6 +4,7 @@
 /model_weights
 /interactive_2080.sh
 /interactive_a100.sh
+/submit_a100.sh
 
 
 slurm-*.out

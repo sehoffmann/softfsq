@@ -1,3 +1,4 @@
+name: vq8192
 quantizer:
   factory: softfsq.quantization.VectorQuantizer
   codebook_dim: 64

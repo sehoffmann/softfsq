@@ -69,7 +69,7 @@ class VQStage(dml.Stage):
 
         if self.config.rampup:
             self.rampup = torch.optim.lr_scheduler.LinearLR(
-                self.optim, 1 / 1000, total_iters=self.config.rampup, verbose=True
+                self.optim, 1 / 100, total_iters=self.config.rampup
             )
         else:
             self.rampup = None
@@ -332,14 +332,21 @@ def train_vqgan():
 
     configs = [OmegaConf.load(c) for c in args.config]
     config = OmegaConf.merge(*configs)
-    config.lr = dml.scale_lr(config.base_lr * config.batch_size)
+    names = [c.name for c in configs if 'name' in c]
+    if names:
+        config.name = '-'.join(names)
+    else:
+        config.name = 'vqgan'
 
     if config.quantizer.factory == 'softfsq.quantization.FSQ':
-        if args.softness is not None:
-            config.quantizer.softness = args.softness
         if args.mode is not None:
             config.quantizer.mode = args.mode
+            config.name += f'-{args.mode}'
+        if args.softness is not None:
+            config.quantizer.softness = args.softness
+            config.name += f'-s{args.softness}'
 
+    config.lr = dml.scale_lr(config.base_lr * config.batch_size)
 
     pipe = dml.Pipeline(config, name=config.get('name'))
     pipe.append(VQStage(epochs=config.epochs))
