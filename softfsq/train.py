@@ -68,9 +68,7 @@ class VQStage(dml.Stage):
         )
 
         if self.config.rampup:
-            self.rampup = torch.optim.lr_scheduler.LinearLR(
-                self.optim, 1 / 100, total_iters=self.config.rampup
-            )
+            self.rampup = torch.optim.lr_scheduler.LinearLR(self.optim, 1 / 100, total_iters=self.config.rampup)
         else:
             self.rampup = None
 

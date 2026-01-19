@@ -94,7 +94,6 @@ class Quantizer(nn.Module):
 
     def __call__(self, inputs: torch.Tensor) -> QuantizedTensors:
         return self.encode(inputs)
-    
 
 
 def identity_quantize(inputs: torch.Tensor) -> QuantizedTensors:

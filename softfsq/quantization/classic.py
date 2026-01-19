@@ -11,6 +11,7 @@ __all__ = [
     'VectorQuantizer',
 ]
 
+
 class LpNormalization(nn.Module):
     """
     Module to perform Lp normalization on input tensors.
@@ -31,7 +32,6 @@ class LpNormalization(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return nn.functional.normalize(x, p=self.p, dim=self.dim, eps=self.eps)
-
 
 
 @torch.no_grad()
