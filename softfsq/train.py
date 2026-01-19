@@ -4,12 +4,12 @@ import dmlcloud as dml
 import torch
 import torch._dynamo
 from omegaconf import OmegaConf
-from torch.amp.grad_scaler import OptState
 from torch.profiler import record_function
 
+from softfsq.losses import LossMixin
 from .callbacks import SaveImageCallback
 from .datasets import Imagenet
-from .losses import CodebookLoss, DiscriminatorLoss, VQGANLoss
+from .losses import DiscriminatorLoss, VQGANLoss
 from .metrics import Perplexity
 
 
@@ -45,12 +45,12 @@ class VQStage(dml.Stage):
         )
 
     def _build_model(self):
+        quantizer = dml.obj_from_cfg(self.config.quantizer)
         model = dml.obj_from_cfg(
             self.config.model,
             input_dim=3,
             output_dim=3,
-            codebook_dim=self.config.codebook_dim,
-            codebook_size=self.config.codebook_size,
+            quantizer=quantizer,
         )
 
         if self.config.model_checkpoint:
@@ -62,20 +62,16 @@ class VQStage(dml.Stage):
             model.compile()
         self.model = dml.wrap_ddp(model, device=self.device, find_unused_parameters=False)
 
-        self.optim = torch.optim.Adam(
+        self.optim = dml.obj_from_cfg(
+            self.config.optimizer,
             self.model.parameters(),
-            lr=self.config.lr,
-            weight_decay=self.config.weight_decay,
-            betas=(self.config.beta1, self.config.beta2),
-            eps=self.config.eps,
-        )  # taming uses betas=(0.5, 0.9)
+        )
 
         if self.config.rampup:
             self.rampup = torch.optim.lr_scheduler.LinearLR(
                 self.optim, 1 / 1000, total_iters=self.config.rampup, verbose=True
             )
         else:
-
             self.rampup = None
 
         if self.config.cosine_annealing:
@@ -87,31 +83,14 @@ class VQStage(dml.Stage):
         self.disc_rampup = None
         self.disc_scheduler = None
 
-        self.scaler = torch.amp.GradScaler(device=self.device)
-
     def _build_loss(self):
         pixel_loss = dml.obj_from_cfg(self.config.pixel_loss)
-
-        if self.config.perceptual_loss:
-            perceptual_loss = dml.obj_from_cfg(self.config.perceptual_loss)
-        else:
-            perceptual_loss = None
-
-        if self.config.adv_loss:
-            adv_loss = dml.obj_from_cfg(self.config.adv_loss)
-        else:
-            adv_loss = None
-
-        codebook_loss = CodebookLoss(
-            commitment_weight=self.config.loss_weights.commitment,
-            codebook_weight=self.config.loss_weights.codebook,
-            z_l2_weight=self.config.loss_weights.z_l2_reg,
-        )
+        perceptual_loss = dml.obj_from_cfg(self.config.perceptual_loss) if self.config.perceptual_loss else None
+        adv_loss = dml.obj_from_cfg(self.config.adv_loss) if self.config.adv_loss else None
 
         self.loss_fn = VQGANLoss(
             pixel_loss=pixel_loss,
             perceptual_loss=perceptual_loss,
-            codebook_loss=codebook_loss,
             adv_loss=adv_loss,
             pixel_weight=self.config.loss_weights.pixel,
             perceptual_weight=self.config.loss_weights.perceptual,
@@ -164,14 +143,13 @@ class VQStage(dml.Stage):
         self.add_column('Recon. (train)', 'train/recon_loss', color='green')
         self.add_column('Recon. (val)', 'val/recon_loss', color='green')
         self.add_column('MSE (val)', 'val/mse', color='green')
-        self.add_column('Embedding', 'train/embedding_loss', color='cyan')
 
         if self.discriminator:
             self.add_column('Dyn. weight', 'train/dyn_adv_weight', color='magenta')
             self.add_column('G', 'train/adv_loss', color='blue')
             self.add_column('D', 'train/d_loss', color='blue')
-            self.add_column('Real Acc.', 'train/real_acc', color='blue', formatter=lambda x: f'{100*x:.1f}%')
-            self.add_column('Fake Acc.', 'train/fake_acc', color='blue', formatter=lambda x: f'{100*x:.1f}%')
+            self.add_column('Real Acc.', 'train/real_acc', color='blue', formatter=lambda x: f'{100 * x:.1f}%')
+            self.add_column('Fake Acc.', 'train/fake_acc', color='blue', formatter=lambda x: f'{100 * x:.1f}%')
 
         self.add_column(
             'Perplexity',
@@ -209,17 +187,12 @@ class VQStage(dml.Stage):
             torch.save(self.model.module.state_dict(), self.run_dir / 'latest.pth')
 
     @torch.no_grad()
-    def _log_generator_metrics(self, x, pred, z, z_q, indices):
-        if pred.dim() == 5:  # ensemble forecast: B, E, C, H, W
-            eval_pred = pred.mean(dim=1)  # B, C, H, W
-        else:
-            eval_pred = pred
+    def _log_generator_metrics(self, input, pred, quant_result):
+        self.log('mse', torch.nn.functional.mse_loss(pred, input))
+        self.log('mae', torch.nn.functional.l1_loss(pred, input))
 
-        self.log('mse', torch.nn.functional.mse_loss(eval_pred, x))
-        self.log('mae', torch.nn.functional.l1_loss(eval_pred, x))
-
-        if indices is not None:
-            self.perplexity_metric.update(indices)
+        if quant_result is not None:
+            self.perplexity_metric.update(quant_result.indices)
 
     @torch.no_grad()
     def _log_discriminator_metrics(self, loss, logits_real, logits_fake):
@@ -227,49 +200,47 @@ class VQStage(dml.Stage):
         self.log('real_acc', (logits_real > 0).float().mean())
         self.log('fake_acc', (logits_fake < 0).float().mean())
 
-    def _generator_step(self, x):
+    def _generator_step(self, input):
         self.optim.zero_grad()
 
-        with record_function('forward'), torch.amp.autocast(self.device.type):
-            out, z, z_q, indices = self.model(x, swapout=self.config.get('swapout', 0))
+        with record_function('forward'), torch.amp.autocast(self.device.type, dtype=torch.bfloat16):
+            pred, quant_result = self.model(input)
+            extra_losses = LossMixin.get_losses(self.model)
 
             with record_function('discriminator_forward'):
                 if self.discriminator and self.global_step >= self.config.adv_start_step:
-                    logits_fake = self.discriminator(out)
+                    logits_fake = self.discriminator(pred)
                 else:
                     logits_fake = None
 
-            total_loss = self.loss_fn(
+            loss = self.loss_fn(
                 model=self.model.module,
-                pred=out,
-                target=x,
+                pred=pred,
+                target=input,
                 global_step=self.global_step,
-                z=z,
-                z_q=z_q,
-                indices=indices,
                 logits_fake=logits_fake,
             )
+            for name, l in extra_losses.items():
+                loss += l
+                self.log(name, l)
 
         with record_function('backward'):
-            self.scaler.scale(total_loss).backward()
-            self.scaler.unscale_(self.optim)
+            loss.backward()
             if self.config.clip_grad_norm:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_grad_norm)
 
         with record_function('optimization'):
-            self.scaler.step(self.optim)
-            was_stepped = self.scaler._per_optimizer_states[id(self.optim)]['stage'] is OptState.STEPPED
-            if was_stepped and self.rampup is not None:
+            self.optim.step()
+            if self.rampup is not None:
                 self.rampup.step()
 
-        self._log_generator_metrics(x, out, z, z_q, indices)
-
-        return out, indices, total_loss
+        self._log_generator_metrics(input, pred, quant_result)
+        return pred
 
     def _discriminator_step(self, x, fakes):
         self.disc_optim.zero_grad()
 
-        with torch.amp.autocast(self.device.type):
+        with torch.amp.autocast(self.device.type, dtype=torch.bfloat16):
             with record_function('forward_real'):
                 logits_real = self.discriminator(x)
             with record_function('forward_fake'):
@@ -281,20 +252,16 @@ class VQStage(dml.Stage):
             )
 
         with record_function('backward'):
-            self.scaler.scale(loss).backward()
-            self.scaler.unscale_(self.disc_optim)
+            loss.backward()
             if self.config.clip_grad_norm:
                 torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), self.config.clip_grad_norm)
 
         with record_function('optimization'):
-            self.scaler.step(self.disc_optim)
-            was_stepped = self.scaler._per_optimizer_states[id(self.disc_optim)]['stage'] is OptState.STEPPED
-            if was_stepped and self.disc_rampup is not None:
+            self.disc_optim.step()
+            if self.disc_rampup is not None:
                 self.disc_rampup.step()
 
         self._log_discriminator_metrics(loss, logits_real, logits_fake)
-
-        return loss
 
     def train(self):
         self.metric_prefix = 'train'
@@ -312,13 +279,11 @@ class VQStage(dml.Stage):
             x = x.to(self.device, non_blocking=True)
 
             with record_function('generator_step'):
-                out, indices, total_loss = self._generator_step(x)
+                out = self._generator_step(x)
 
             with record_function('discriminator_step'):
                 if self.discriminator and self.global_step >= self.config.adv_start_step:
-                    disc_loss = self._discriminator_step(x, out)
-
-            self.scaler.update()
+                    self._discriminator_step(x, out)
 
             self.log('misc/samples', len(x), reduction='sum', prefixed=False)
             if self.has_profiler:

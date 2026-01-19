@@ -20,7 +20,7 @@ maintainers = [
     { name = "Sebastian Hoffmann", email = "shoffmann@bgc-jena.mpg.de"},
 ]
 
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "dmlcloud",
     "torch~=2.6",

@@ -83,19 +83,13 @@ class SaveImageCallback(dml.Callback):
                 x = x.cpu()[0]
                 self._save_image(path / f'{i:04d}.jpg', x)
             else:
-                out, _, _, _ = stage.model(x, ensemble_size=20)
+                out, _ = stage.model(x)
                 out = out.cpu()[0]
-                if out.dim() == 4:  # ensemble forecast: E, C, H, W
-                    self._save_ensemble_images(path / f'{i:04d}', out)
-                else:
-                    self._save_image(path / f'{i:04d}.jpg', out)
+                self._save_image(path / f'{i:04d}.jpg', out)
 
-                out, _, _, _ = stage.model(x, ensemble_size=20, quantize=False)
+                out, _ = stage.model(x, quantize=False)
                 out = out.cpu()[0]
-                if out.dim() == 4:  # ensemble forecast: E, C, H, W
-                    self._save_ensemble_images(path / f'{i:04d}_noquant', out)
-                else:
-                    self._save_image(path / f'{i:04d}_noquant.jpg', out)
+                self._save_image(path / f'{i:04d}_noquant.jpg', out)
 
     def _to_rgb(self, img):
         img = (img + 1) * 127.5
@@ -105,28 +99,3 @@ class SaveImageCallback(dml.Callback):
     def _save_image(self, path, img):
         img = self._to_rgb(img).to(torch.uint8).numpy()
         plt.imsave(path, img)
-
-    def _save_ensemble_images(self, path, tensor):
-        for j in range(tensor.size(0)):
-            if j >= 6:
-                break
-            self._save_image(f'{path}_member{j:02d}.jpg', tensor[j])
-        self._save_image(f'{path}_mean.jpg', tensor.mean(dim=0))
-
-        std = 2 * tensor.std(dim=0) * 127.5
-        std = torch.clamp(std, 0, 255).to(torch.uint8).numpy()
-        std = std.transpose(1, 2, 0)
-        plt.imsave(f'{path}_std_rgb.jpg', std)
-
-        # Overlaid std
-        fig, ax = plt.subplots()
-        mean = self._to_rgb(tensor.mean(dim=0)).to(torch.uint8).numpy()
-        ax.imshow(mean, alpha=1.0)
-
-        std_abs = tensor.std(dim=0).mean(dim=0) * 127.5
-        cmap = alpha_blended_cmap('inferno', min_alpha=0.0, max_alpha=0.5, start=0.33)
-        ax.imshow(std_abs.numpy(), cmap=cmap, vmin=0, vmax=40)
-
-        ax.set_axis_off()
-        fig.savefig(f'{path}_std_overlay.jpg', bbox_inches='tight', pad_inches=0)
-        plt.close(fig)

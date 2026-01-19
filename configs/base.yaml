@@ -1,36 +1,31 @@
 name: vqgan
 seed: 12
+model_checkpoint: null
 
 base_lr: 4.5e-6
 batch_size: 12
 epochs: 20
-pretrain_steps: 0
 steps_per_epoch: 0
 
-rampup: null
-eps: 1e-8
-beta1: 0.5
-beta2: 0.9
-weight_decay: 0
-clip_grad_norm: null
-cosine_annealing: False
-
-codebook_size: 1024
-codebook_dim: 256
-swapout: 0.0
-
 model: ???
-model_checkpoint: null
+quantizer: ???
 discriminator: null
+
+optimizer:
+  factory: torch.optim.Adam
+  eps: 1e-8
+  betas: [0.5, 0.9]
+  weight_decay: 0.0
+
+rampup: null
+cosine_annealing: False
+clip_grad_norm: null
 
 adv_start_step: 0
 
 loss_weights:
   pixel: 1.0
   perceptual: 1.0
-  codebook: 0.25
-  commitment: 1.0
-  z_l2_reg: 0.0
   adv: 0.8
 
 pixel_loss: torch.nn.L1Loss
