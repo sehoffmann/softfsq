@@ -65,6 +65,7 @@ class VQStage(dml.Stage):
         self.optim = dml.obj_from_cfg(
             self.config.optimizer,
             self.model.parameters(),
+            lr=self.config.lr,
         )
 
         if self.config.rampup:
