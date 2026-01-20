@@ -32,7 +32,7 @@ perceptual_loss: null
 adv_loss: softfsq.losses.GeneratorWGANLoss
 disc_loss: softfsq.losses.DiscriminatorHingeLoss
 
-compile: False
+compile: True
 profile: False
 wandb: softfsq-imagenet
 checkpointing: True
