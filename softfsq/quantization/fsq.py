@@ -74,10 +74,15 @@ class FSQ(Quantizer):
     def softness(self) -> torch.Tensor:
         if self.softness_schedule_steps > 0:
             progress = self.step.float() / self.softness_schedule_steps
+            min_softness = 1e-1
             softness = torch.where(
                 progress <= 1.0,
-                self._softness + 2 * self._softness * (1.0 - progress),
-                self._softness,
+                min_softness +  (4.0 - min_softness) * (1.0 - progress),
+                torch.where(
+                    progress <= 1.5,
+                    min_softness + (self._softness - min_softness) * (progress - 1.0)*2,
+                    self._softness,
+                ),
             )
             return softness
         else:
