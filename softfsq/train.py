@@ -325,6 +325,7 @@ def train_vqgan():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--softness', type=float, default=None, help='Softness for soft quantization')
+    parser.add_argument('--rampup', type=int, default=0, help='Number of steps to ramp up the softness')
     parser.add_argument('--mode', type=str, default=None, help='Softening mode for soft quantization')
     parser.add_argument('config', type=str, nargs='+', help='Path to the configuration file')
     args = parser.parse_args()
@@ -344,6 +345,9 @@ def train_vqgan():
         if args.softness is not None:
             config.quantizer.softness = args.softness
             config.name += f'-s{args.softness}'
+        if args.rampup:
+            config.quantizer.softness_schedule_steps = args.rampup
+            config.name += f'-r{args.rampup}'
 
     config.lr = dml.scale_lr(config.base_lr * config.batch_size)
 
