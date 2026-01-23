@@ -1,0 +1,4 @@
+name: identity
+quantizer:
+  factory: softfsq.quantization.IdentityQuantizer
+  input_dim: 128

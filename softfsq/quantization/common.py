@@ -124,7 +124,7 @@ class IdentityQuantizer(Quantizer):
     @override
     @property
     def codebook_size(self) -> int:
-        return 0  # No codebook
+        return 1  # No codebook
 
     @override
     @property
@@ -137,4 +137,8 @@ class IdentityQuantizer(Quantizer):
 
     @override
     def encode(self, inputs: torch.Tensor) -> QuantizedTensors:
-        return QuantizedTensors(values=inputs, indices=None, pre_quantization=inputs)
+        return QuantizedTensors(
+            values=inputs, 
+            indices=torch.zeros_like(inputs[:, 0]), 
+            pre_quantization=inputs
+        )
