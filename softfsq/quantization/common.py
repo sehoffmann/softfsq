@@ -4,7 +4,7 @@ from typing import override
 
 import torch
 from torch import nn
-
+import dmlcloud as dml
 
 __all__ = [
     'QuantizedTensors',
@@ -26,9 +26,9 @@ class QuantizedTensors:
     these unmodified inputs are stored in the `pre_quantization` attribute.
 
     Attributes:
-        values (torch.Tensor): Float Tensor of shape (B, D, ...) containing quantized values.
-        indices (torch.Tensor): Int64 Tensor of shape (B, ...) containing quantized indices.
-        pre_quantization (torch.Tensor, optional): Float Tensor of shape (B, D, ...) containing unquantized values.
+        values (torch.Tensor): Float Tensor of shape (..., D) containing quantized values.
+        indices (torch.Tensor): Int64 Tensor of shape (...) containing quantized indices.
+        pre_quantization (torch.Tensor, optional): Float Tensor of shape (..., D) containing unquantized values.
     """
 
     values: torch.Tensor
@@ -47,10 +47,10 @@ class Quantizer(nn.Module):
         Decode quantized indices to continuous values.
 
         Args:
-            indices (torch.Tensor): Int64 Tensor of shape (B, ...) containing quantized indices.
+            indices (torch.Tensor): Int64 Tensor of shape (...) containing quantized indices.
 
         Returns:
-            torch.Tensor: Decoded continuous values of shape (B, D, ...).
+            torch.Tensor: Decoded continuous values of shape (..., D).
         """
         pass
 
@@ -60,12 +60,12 @@ class Quantizer(nn.Module):
         Encode continuous values to quantized indices.
 
         Args:
-            inputs (torch.Tensor): Float Tensor of shape (B, D, ...) containing continuous values.
+            inputs (torch.Tensor): Float Tensor of shape (..., D) containing continuous values.
 
         Returns:
             QuantizedTensors: A dataclass containing:
-                - values (torch.Tensor): Float Tensor of shape (B, D, ...) with quantized values.
-                - indices (torch.Tensor): Int64 Tensor of shape (B, ...) with quantized indices.
+                - values (torch.Tensor): Float Tensor of shape (..., D) with quantized values.
+                - indices (torch.Tensor): Int64 Tensor of shape (...) with quantized indices.
         """
         pass
 
@@ -93,7 +93,9 @@ class Quantizer(nn.Module):
         pass
 
     def __call__(self, inputs: torch.Tensor) -> QuantizedTensors:
-        return self.encode(inputs)
+        result = self.encode(inputs)
+        residuals = result.values - result.pre_quantization
+        dml.log_metric('quant_residual_l1', torch.abs(residuals).mean())
 
 
 def identity_quantize(inputs: torch.Tensor) -> QuantizedTensors:
@@ -101,7 +103,7 @@ def identity_quantize(inputs: torch.Tensor) -> QuantizedTensors:
     Identity quantization function that returns the inputs as is.
 
     Args:
-        inputs (torch.Tensor): Input tensor of shape (B, D, ...).
+        inputs (torch.Tensor): Input tensor of shape (..., D).
 
     Returns:
         QuantizedTensors: A dataclass containing:

@@ -101,8 +101,8 @@ class AdaptiveNormalQuantization(LossMixin, Quantizer):
 
     @torch.no_grad()
     def _decode_indices(self, indices: torch.Tensor) -> torch.Tensor:
-        # indices is of shape (B, ...)
-        # We need to convert it to shape (B, ..., D)
+        # indices is of shape (..., )
+        # We need to convert it to shape (..., D)
         indices_md = []
         for d in range(self.dim):
             indices_d = (indices // self.basis[d]) % self.num_bins[d]
@@ -111,8 +111,8 @@ class AdaptiveNormalQuantization(LossMixin, Quantizer):
 
     @torch.no_grad()
     def _decode(self, indices: torch.Tensor, mean: torch.Tensor = None, C: torch.Tensor = None) -> torch.Tensor:
-        # indices is of shape (B, ...)
-        indices_md = self._decode_indices(indices)  # B x ... x D
+        # indices is of shape (...,)
+        indices_md = self._decode_indices(indices)  # ... x D
         shape = indices_md.shape
         indices_flat = indices_md.reshape(-1, self.dim)  # N x D
 
@@ -121,9 +121,8 @@ class AdaptiveNormalQuantization(LossMixin, Quantizer):
             C = torch.linalg.cholesky(cov)  # D x D
 
         centers_normed = torch.take_along_dim(self.centers, indices_flat.permute(1, 0), dim=1).permute(1, 0)  # N x D
-        quantized = centers_normed @ C.T + mean  # N x D
-        quantized = quantized.reshape(*shape)  # B x ... x D
-        return einops.rearrange(quantized, 'B ... D -> B D ...')
+        quantized = centers_normed.reshape(shape)  # ... x D
+        return quantized
 
     @override
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
@@ -131,9 +130,8 @@ class AdaptiveNormalQuantization(LossMixin, Quantizer):
 
     @override
     def encode(self, x: torch.Tensor) -> QuantizedTensors:
-        # x is of shape (B, D, ...)
         org_shape = x.shape
-        x_flat = einops.rearrange(x, 'B D ... -> (B ...) D')  # -> N x D
+        x_flat = x.flatten(start_dim=0, end_dim=-2)  # flatten to (N, D)
 
         # Update distribution parameters
         mean, cov = self.normal_estimator(x_flat)
@@ -162,14 +160,11 @@ class AdaptiveNormalQuantization(LossMixin, Quantizer):
         # z_q_ste = centers_normed_ste @ C.T + mean  # N x D
 
         indices = self._encode_indices(indices_md)  # N
-        indices = indices.reshape(org_shape[:1] + org_shape[2:])  # B x ...
 
-        # Reshape back to original shape, B x D x ...
-        z = z.reshape(org_shape[:1] + org_shape[2:] + org_shape[1:2])
-        z = einops.rearrange(z, 'B ... D -> B D ...')
-
-        z_q_ste = z_q_ste.reshape(org_shape[:1] + org_shape[2:] + org_shape[1:2])
-        z_q_ste = einops.rearrange(z_q_ste, 'B ... D -> B D ...')
+        # Reshape back to original shape
+        indices = indices.reshape(org_shape[:-1])  # ...
+        z = z.reshape(org_shape)  # ... x D
+        z_q_ste = z_q_ste.reshape(org_shape)
 
         if self.kl_weight > 0:
             dims = (0,) + tuple(range(2, len(org_shape)))  # All dimensions except D

@@ -112,23 +112,16 @@ class VectorQuantizer(LossMixin, Quantizer):
 
     @override
     def decode(self, indices: torch.Tensor) -> torch.Tensor:
-        y = self.embedding(indices)  # (B, ..., D)
-        y = einops.rearrange(y, 'b ... d -> b d ...')
-        return y.contiguous()
+        return self.embedding(indices)  # (B, ..., D)
 
     @override
     def encode(self, inputs):
-        inputs = einops.rearrange(inputs, 'b c ... -> b ... c').contiguous()  # channels last
         z_normed = self.norm(inputs)
         codebook_normed = self.norm(self.embedding.weight)
 
         # quantize
         indices = nearest_neighbor(z_normed, codebook_normed)  # (B, ...)
         z_q = codebook_normed[indices]  # (B, ..., D)
-
-        # to channels first
-        z_q = einops.rearrange(z_q, 'b ... c -> b c ...').contiguous()
-        z_normed = einops.rearrange(z_normed, 'b ... c -> b c ...').contiguous()
 
         # compute loss
         commitment_loss = self.commitment_weight * torch.mean((z_q.detach() - z_normed) ** 2)
@@ -137,4 +130,8 @@ class VectorQuantizer(LossMixin, Quantizer):
         self.set_loss('embedding_loss', embedding_loss)
 
         z_q_str = z_normed + (z_q - z_normed).detach()  # straight-through estimator
-        return QuantizedTensors(values=z_q_str, indices=indices, pre_quantization=z_normed)
+        return QuantizedTensors(
+            values=z_q_str, 
+            indices=indices,
+            pre_quantization=z_normed
+        )

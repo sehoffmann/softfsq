@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from einops import rearrange
+import einops
 
 import dmlcloud as dml
 
@@ -254,15 +254,11 @@ class TamingVQGAN(nn.Module):
 
         z = self.encoder(x)
 
+        z = einops.rearrange(z, 'B C H W -> B H W C').contiguous()
         quant_res = self.quantizer(z)
-        z_q = quant_res.values
-        z_pre_q = quant_res.pre_quantization
-        dml.log_metric(
-            'quantization_residual', 
-            torch.linalg.vector_norm(z_q - z_pre_q, dim=1, ord=1).mean(),
-        )
+        x = quant_res.values if quantize else quant_res.pre_quantization
+        x = einops.rearrange(x, 'B H W C -> B C H W').contiguous()
 
-        x = z_q if quantize else z_pre_q
         x = self.post_quant_conv(x)
         decoded = self.decoder(x)
         return decoded, quant_res

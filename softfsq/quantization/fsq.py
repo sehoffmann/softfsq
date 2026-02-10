@@ -110,8 +110,7 @@ class FSQ(Quantizer):
         indices = indices[..., torch.newaxis]
         codes_non_centered = torch.remainder(torch.floor_divide(indices, self.basis), self.levels)
         decoded = self._scale_and_shift_inverse(codes_non_centered)
-        decoded = decoded * self.scale_factor
-        return einops.rearrange(decoded, 'b ... c -> b c ...').contiguous()  # channels first
+        return decoded
 
     @override
     def encode(self, inputs: torch.Tensor) -> QuantizedTensors:
@@ -120,7 +119,6 @@ class FSQ(Quantizer):
         softness = self.softness
         dml.log_metric('softness', softness)
 
-        inputs = einops.rearrange(inputs, 'b c ... -> b ... c').contiguous()  # channels last
         with torch.autocast(device_type=inputs.device.type, enabled=False):  # run in f32!
             inputs_f32 = inputs.float()
             z_bounded = self._bound(inputs_f32)  # bound to [-(L-1)/2, (L-1)/2]
@@ -148,11 +146,11 @@ class FSQ(Quantizer):
             # get indices
             indices = self._codes_to_indexes(z_q_hard)
 
-        # to channels first
-        z_q = einops.rearrange(z_q, 'b ... c -> b c ...').contiguous()
-        z_bounded = einops.rearrange(z_bounded, 'b ... c -> b c ...').contiguous()
-
-        return QuantizedTensors(values=z_q, indices=indices, pre_quantization=z_bounded)
+        return QuantizedTensors(
+            values=z_q, 
+            indices=indices, 
+            pre_quantization=z_bounded,
+        )
 
     def __repr__(self) -> str:
         return f'FSQ(levels={self.levels.tolist()}, mode="{self.mode}", softness={self._softness.item()}, softness_schedule_steps={self.softness_schedule_steps})'

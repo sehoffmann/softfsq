@@ -38,9 +38,6 @@ class GFSQ(Quantizer):
         )  # used to convert codes (i.e. rounded values) to indices
         self.register_buffer('basis', basis, persistent=False)
 
-        step = torch.tensor(0, dtype=torch.int64)
-        self.register_buffer('step', step, persistent=True)
-
         self._codebook_size = int(torch.prod(levels).item())
         self._codebook_dim = len(levels)
 
@@ -91,15 +88,10 @@ class GFSQ(Quantizer):
         indices = indices[..., torch.newaxis]
         codes_non_centered = torch.remainder(torch.floor_divide(indices, self.basis), self.levels)
         decoded = self._scale_and_shift_inverse(codes_non_centered)
-        decoded = decoded
-        return einops.rearrange(decoded, 'b ... c -> b c ...').contiguous()  # channels first
+        return decoded
 
     @override
     def encode(self, inputs: torch.Tensor) -> QuantizedTensors:
-        if self.training:
-            self.step += 1
-
-        inputs = einops.rearrange(inputs, 'b c ... -> b ... c').contiguous()  # channels last
         with torch.autocast(device_type=inputs.device.type, enabled=False):  # run in f64!
             inputs_f64 = inputs.double()
             z_bounded = self._bound(inputs_f64)  # bound to [-(L-1)/2, (L-1)/2]
@@ -115,11 +107,11 @@ class GFSQ(Quantizer):
             # get indices
             indices = self._codes_to_indexes(z_q_hard)
 
-        # to channels first
-        z_q = einops.rearrange(z_q, 'b ... c -> b c ...').contiguous().to(inputs.dtype)
-        z_bounded = einops.rearrange(z_bounded, 'b ... c -> b c ...').contiguous().to(inputs.dtype)
-
-        return QuantizedTensors(values=z_q, indices=indices, pre_quantization=z_bounded)
+        return QuantizedTensors(
+            values=z_q, 
+            indices=indices, 
+            pre_quantization=z_bounded,
+        )
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(levels={self.levels.tolist()})'
