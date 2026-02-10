@@ -1,0 +1,6 @@
+name: pre-ViT-B-f16
+model:
+  factory: softfsq.models.vit_B
+  patch_size: 16
+discriminator: null
+perceptual_loss: softfsq.losses.lpips_loss

@@ -1,0 +1,6 @@
+name: pre-ViT-S-f4
+model:
+  factory: softfsq.models.vit_S
+  patch_size: 4
+discriminator: null
+perceptual_loss: softfsq.losses.lpips_loss
