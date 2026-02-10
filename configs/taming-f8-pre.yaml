@@ -1,4 +1,4 @@
-name: pre-taming-f8
+name: pre-tamingV2-f8
 model: softfsq.models.taming_f8
 discriminator: null
 perceptual_loss: softfsq.losses.lpips_loss

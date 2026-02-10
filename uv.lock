@@ -242,6 +242,8 @@ dependencies = [
     { name = "progress-table" },
     { name = "torch" },
     { name = "torchmetrics" },
+    { name = "torchvision" },
+    { name = "wandb" },
     { name = "xarray" },
 ]
 
@@ -253,6 +255,8 @@ requires-dist = [
     { name = "progress-table", specifier = ">=2.2.0" },
     { name = "torch", specifier = "~=2.5" },
     { name = "torchmetrics", specifier = "~=1.6" },
+    { name = "torchvision" },
+    { name = "wandb" },
     { name = "xarray" },
 ]
 

@@ -96,6 +96,7 @@ class Quantizer(nn.Module):
         result = self.encode(inputs)
         residuals = result.values - result.pre_quantization
         dml.log_metric('quant_residual_l1', torch.abs(residuals).mean())
+        return result
 
 
 def identity_quantize(inputs: torch.Tensor) -> QuantizedTensors:
