@@ -1,0 +1,6 @@
+name: gfsq_8192_normal
+quantizer:
+  factory: softfsq.quantization.gfsq.GFSQ
+  levels: [8,8,5,5,5]
+  scale: 1.41421356
+  shape: 2.0

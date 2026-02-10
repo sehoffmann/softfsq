@@ -1,0 +1,4 @@
+name: pre-tamingV2-f16
+model: softfsq.models.taming_f16
+discriminator: null
+perceptual_loss: softfsq.losses.lpips_loss

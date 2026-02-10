@@ -204,6 +204,9 @@ class VQStage(dml.Stage):
 
         with record_function('forward'), torch.amp.autocast(self.device.type, dtype=torch.bfloat16):
             pred, quant_result = self.model(input)
+            if torch.any(torch.isnan(pred)):
+                raise ValueError('NaN detected in model output')
+
             extra_losses = LossMixin.get_losses(self.model)
 
             with record_function('discriminator_forward'):
